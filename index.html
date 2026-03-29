@@ -113,105 +113,97 @@ video {
 </div>
 
 <script>
-// ---------------- SPEECH (FIXED FOR RPI) ----------------
+// ---------------- DEBUG LOGGER ----------------
+function log(msg) {
+    console.log("[DEBUG]", msg);
+
+    let convo = document.getElementById("conversation");
+    let div = document.createElement("div");
+    div.className = "msg";
+    div.style.color = "#ffaa00";
+    div.innerText = "[LOG] " + msg;
+    convo.appendChild(div);
+    convo.scrollTop = convo.scrollHeight;
+}
+
+// ---------------- SPEECH SETUP ----------------
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
 let recognition = null;
 
-// Local responses
-const responses = {
+log("Checking SpeechRecognition support...");
 
-    "hello": "Hello, I am online.",
-    "hi": "Hi there!",
-    "hey": "Hey! What can I do for you?",
-
-    "how are you": "All systems are running perfectly.",
-    "your name": "I am your AI dashboard assistant.",
-    "who made you": "You created me. Pretty cool, right?",
-
-    "time": () => "Current time is " + new Date().toLocaleTimeString(),
-    "date": () => "Today is " + new Date().toDateString(),
-
-    "status": "All systems operational.",
-    "are you listening": "Yes, I am always listening.",
-
-    "open youtube": "Opening YouTube",
-    "open google": "Opening Google",
-    "open github": "Opening GitHub",
-    "search": "What should I search for?",
-
-    "tell me a joke": "Why do programmers hate nature? Too many bugs.",
-    "do you sleep": "I never sleep. I am always awake.",
-    "thank you": "You're welcome.",
-    "bye": "Goodbye. Shutting down interaction mode.",
-    "help": "You can ask me about time, open websites, or just chat with me."
-};
-
-// ---------------- INIT SPEECH ----------------
 if (!SpeechRecognition) {
+    log("â SpeechRecognition NOT supported");
+
     document.getElementById("status").innerText =
-        "Speech NOT supported (RPi Chromium)";
-
-    // 🔹 Keyboard fallback
-    document.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-            let cmd = prompt("Enter command:");
-            if (cmd) {
-                addMessage("You: " + cmd, "user");
-                handleCommand(cmd.toLowerCase());
-            }
-        }
-    });
-
-    // 🔹 Auto demo (so UI doesn't look dead)
-    setInterval(() => {
-        let demo = "hello";
-        addMessage("You: " + demo, "user");
-        handleCommand(demo);
-    }, 8000);
+        "Speech NOT supported";
 
 } else {
+    log("â SpeechRecognition supported");
+
     recognition = new SpeechRecognition();
     recognition.lang = "en-US";
 
     function startListening() {
+        log("ð¤ Starting listening...");
         document.getElementById("status").innerText = "Listening...";
-        recognition.start();
+
+        try {
+            recognition.start();
+        } catch (e) {
+            log("Error starting recognition: " + e);
+        }
     }
 
+    recognition.onstart = () => log("ð¤ Mic started");
+    recognition.onaudiostart = () => log("ð Audio capture started");
+    recognition.onspeechstart = () => log("ð£ï¸ Speech detected");
+
     recognition.onresult = function(event) {
+        log("â Got speech result");
+
         let text = event.results[0][0].transcript.toLowerCase();
+        log("User said: " + text);
+
         addMessage("You: " + text, "user");
         handleCommand(text);
     };
 
-    recognition.onend = () => setTimeout(startListening, 500);
+    recognition.onerror = function(event) {
+        log("â Speech error: " + event.error);
+    };
 
-    setTimeout(startListening, 1000);
+    recognition.onend = () => {
+        log("ð Restarting listening...");
+        setTimeout(startListening, 1000);
+    };
+
+    setTimeout(startListening, 1500);
 }
+
+// ---------------- RESPONSES ----------------
+const responses = {
+    "hello": "Hello, I am online.",
+    "time": () => new Date().toLocaleTimeString(),
+    "open google": "Opening Google"
+};
 
 // ---------------- COMMAND ----------------
 function handleCommand(command) {
+    log("Processing command: " + command);
+
     let response = "I don't understand.";
 
     for (let key in responses) {
         if (command.includes(key)) {
+            log("Matched command: " + key);
 
             response = typeof responses[key] === "function"
                 ? responses[key]()
                 : responses[key];
 
-            if (key === "open youtube") window.open("https://youtube.com");
             if (key === "open google") window.open("https://google.com");
-            if (key === "open github") window.open("https://github.com");
-
-            if (key === "search") {
-                let query = command.replace("search", "").trim();
-                if (query) {
-                    window.open(`https://www.google.com/search?q=${query}`);
-                    response = "Searching for " + query;
-                }
-            }
 
             break;
         }
@@ -234,10 +226,14 @@ function addMessage(text, type) {
 
 // ---------------- SPEAK ----------------
 function speak(text) {
+    log("Speaking: " + text);
+
     document.getElementById("status").innerText = "Speaking...";
+
     let speech = new SpeechSynthesisUtterance(text);
 
     speech.onend = () => {
+        log("Finished speaking");
         document.getElementById("status").innerText = "Waiting...";
     };
 
@@ -245,16 +241,21 @@ function speak(text) {
 }
 
 // ---------------- CAMERA ----------------
+log("Initializing camera...");
+
 navigator.mediaDevices.getUserMedia({ video: true, audio: true })
 .then(stream => {
+    log("â Camera started");
+
     const video = document.getElementById("camera");
     video.srcObject = stream;
     video.play();
 })
 .catch(err => {
-    console.log("Camera error:", err);
-    document.getElementById("status").innerText = "Camera/Mic error";
+    log("â Camera error: " + err);
+    document.getElementById("status").innerText = "Camera error";
 });
 </script>
+
 </body>
 </html>
