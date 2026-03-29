@@ -113,62 +113,82 @@ video {
 </div>
 
 <script>
-// ---------------- SPEECH ----------------
+// ---------------- SPEECH (FIXED FOR RPI) ----------------
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-const recognition = new SpeechRecognition();
 
-recognition.lang = "en-US";
+let recognition = null;
 
 // Local responses
 const responses = {
 
-    // Greetings
     "hello": "Hello, I am online.",
     "hi": "Hi there!",
     "hey": "Hey! What can I do for you?",
 
-    // Basic questions
     "how are you": "All systems are running perfectly.",
     "your name": "I am your AI dashboard assistant.",
     "who made you": "You created me. Pretty cool, right?",
 
-    // Time & Date
     "time": () => "Current time is " + new Date().toLocaleTimeString(),
     "date": () => "Today is " + new Date().toDateString(),
 
-    // System style responses
     "status": "All systems operational.",
     "are you listening": "Yes, I am always listening.",
 
-    // Actions
     "open youtube": "Opening YouTube",
     "open google": "Opening Google",
     "open github": "Opening GitHub",
     "search": "What should I search for?",
 
-    // Fun / personality
     "tell me a joke": "Why do programmers hate nature? Too many bugs.",
     "do you sleep": "I never sleep. I am always awake.",
     "thank you": "You're welcome.",
     "bye": "Goodbye. Shutting down interaction mode.",
-
-    // Smart fallback hints
     "help": "You can ask me about time, open websites, or just chat with me."
 };
 
-// Start loop
-function startListening() {
-    document.getElementById("status").innerText = "Listening...";
-    recognition.start();
+// ---------------- INIT SPEECH ----------------
+if (!SpeechRecognition) {
+    document.getElementById("status").innerText =
+        "Speech NOT supported (RPi Chromium)";
+
+    // 🔹 Keyboard fallback
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+            let cmd = prompt("Enter command:");
+            if (cmd) {
+                addMessage("You: " + cmd, "user");
+                handleCommand(cmd.toLowerCase());
+            }
+        }
+    });
+
+    // 🔹 Auto demo (so UI doesn't look dead)
+    setInterval(() => {
+        let demo = "hello";
+        addMessage("You: " + demo, "user");
+        handleCommand(demo);
+    }, 8000);
+
+} else {
+    recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+
+    function startListening() {
+        document.getElementById("status").innerText = "Listening...";
+        recognition.start();
+    }
+
+    recognition.onresult = function(event) {
+        let text = event.results[0][0].transcript.toLowerCase();
+        addMessage("You: " + text, "user");
+        handleCommand(text);
+    };
+
+    recognition.onend = () => setTimeout(startListening, 500);
+
+    setTimeout(startListening, 1000);
 }
-
-recognition.onresult = function(event) {
-    let text = event.results[0][0].transcript.toLowerCase();
-    addMessage("You: " + text, "user");
-    handleCommand(text);
-};
-
-recognition.onend = () => setTimeout(startListening, 500);
 
 // ---------------- COMMAND ----------------
 function handleCommand(command) {
@@ -176,12 +196,23 @@ function handleCommand(command) {
 
     for (let key in responses) {
         if (command.includes(key)) {
+
             response = typeof responses[key] === "function"
                 ? responses[key]()
                 : responses[key];
 
             if (key === "open youtube") window.open("https://youtube.com");
             if (key === "open google") window.open("https://google.com");
+            if (key === "open github") window.open("https://github.com");
+
+            if (key === "search") {
+                let query = command.replace("search", "").trim();
+                if (query) {
+                    window.open(`https://www.google.com/search?q=${query}`);
+                    response = "Searching for " + query;
+                }
+            }
+
             break;
         }
     }
@@ -205,22 +236,25 @@ function addMessage(text, type) {
 function speak(text) {
     document.getElementById("status").innerText = "Speaking...";
     let speech = new SpeechSynthesisUtterance(text);
+
     speech.onend = () => {
         document.getElementById("status").innerText = "Waiting...";
     };
+
     window.speechSynthesis.speak(speech);
 }
 
 // ---------------- CAMERA ----------------
-navigator.mediaDevices.getUserMedia({ video: true })
+navigator.mediaDevices.getUserMedia({ video: true, audio: true })
 .then(stream => {
-    document.getElementById("camera").srcObject = stream;
+    const video = document.getElementById("camera");
+    video.srcObject = stream;
+    video.play();
 })
-.catch(err => console.log(err));
-
-// ---------------- START ----------------
-setTimeout(startListening, 1000);
+.catch(err => {
+    console.log("Camera error:", err);
+    document.getElementById("status").innerText = "Camera/Mic error";
+});
 </script>
-
 </body>
 </html>
